@@ -1,2 +1,2 @@
 <img src="./assets/POd5.gif">
-<img align="center" src="https://github-readme-stats.vercel.app/api/top-lanfs/?username=hunterchris/>
+![GitHub stats](https://github-readme-stats.vercel.app/api?username=hunterchris&theme=merko&show_icons=true)
