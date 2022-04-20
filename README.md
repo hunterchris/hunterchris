@@ -2,7 +2,8 @@
 Hello! That is me at work. I'm a platform Engineer based in Berlin. 
 I know many things and nothing at all
 
-- I'm currently working as DevOps engineer (buzzword bingo: DataOps) in the Data section of Axel Springer NMT.
+- I currently work as DevOps engineer in the Data section of Axel Springer NMT. (buzzword bingo: DataOps)
+
 - I take care of anything related to infrastructure: Deployment, Automation, Observability, etc.
 
 <img src="./assets/2825704.gif">
