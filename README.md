@@ -1,5 +1,5 @@
 <img src="./assets/POd5.gif">
-Hello! That is me at work. I'm a platform Engineer based in Berlin. 
+Hello! This is me, I'm a platform Engineer based in Berlin. 
 I know many things and nothing at all
 
 - I currently work as DevOps engineer in the Data section of Axel Springer NMT. (buzzword bingo: DataOps)
