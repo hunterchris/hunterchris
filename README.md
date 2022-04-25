@@ -10,4 +10,3 @@ I know many things and nothing at all
 
 ## &#x1f4c8; Boring stats
 <img align="center" src="https://github-readme-stats.vercel.app/api/top-langs/?username=hunterchris&theme=merko" />
-
