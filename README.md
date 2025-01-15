@@ -7,6 +7,8 @@ I know many things and nothing at all
 - I take care of anything related to infrastructure: Deployment, Automation, Observability, etc.
   
 - I also take care of the Tracking platform for the user behavioral data for our German brands.
+  
+- I build data pipelines to ingest data consistently in our data lake (Palantir Foundry)
 
 <img src="./assets/2825704.gif">
 
