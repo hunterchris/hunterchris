@@ -2,13 +2,13 @@
 Hello! This is me, I'm a platform Engineer based in Berlin. 
 I know many things and nothing at all
 
-- I currently work as Sr DevOps engineer in the Data section of Axel Springer NMT, and I am the Team Lead of the Tracking and Data Infastructure team. (buzzword bingo: DataOps)
+- I currently work as Lead engineer (Cloud) in the Platforms department of Axel Springer NMT
 
-- I take care of anything related to infrastructure: Deployment, Automation, Observability, etc.
+- I take care of everything related to infrastructure: Deployment, Automation, Observability, etc.
+
+- Together with the other Lead engineers, we mentor our fellow enginners and build tools to support them in their day to day work
   
-- I also take care of the Tracking platform for the user behavioral data for our German brands.
-  
-- I build data pipelines to ingest data consistently in our data lake (Palantir Foundry)
+- From time to time, I also build data pipelines to ingest data consistently in our data lake (Palantir Foundry)
 
 <img src="./assets/2825704.gif">
 
