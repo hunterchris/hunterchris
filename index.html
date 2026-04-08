@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>hunterchris</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #080c14;
+      --bg-panel:  rgba(10, 17, 32, 0.93);
+      --border:    #0d2e12;
+      --cyan:      #00ff41;
+      --teal:      #00cc33;
+      --text:      #b8d4b8;
+      --text-dim:  #3a6b3a;
+      --glow-cyan: 0 0 8px #00ff4188, 0 0 20px #00ff4144;
+      --glow-teal: 0 0 8px #00cc3388, 0 0 20px #00cc3344;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { width: 100%; height: 100%; }
+    body { width: 100%; min-height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    /* ── FULL PAGE BACKGROUND GIF ── */
+    .page-bg {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(.2) saturate(1.4);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── NETWORK CANVAS (connections, fixed, between bg and panels) ── */
+    #net-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    /* ── SCANLINES ── */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── DRAG SURFACE ── */
+    /* No z-index here — panels participate in root stacking context directly */
+    #surface {
+      position: relative;
+      width: 100%;
+      min-height: 200vh;
+    }
+
+    /* ── PANELS ── */
+    .panel {
+      position: absolute;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-top: 2px solid var(--cyan);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 8px 48px rgba(0,0,0,.65), 0 0 0 1px rgba(0,229,255,.05);
+      user-select: none;
+      /* z-index set via JS */
+    }
+
+    .panel-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: grab;
+      background: rgba(0,229,255,.025);
+    }
+    .panel-bar:active { cursor: grabbing; }
+
+    .panel-bar-title {
+      font-family: 'Orbitron', monospace;
+      font-size: .6rem;
+      letter-spacing: .22em;
+      color: var(--cyan);
+      text-shadow: var(--glow-cyan);
+      text-transform: uppercase;
+    }
+
+    .panel-bar-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: var(--glow-cyan);
+      animation: pulse 2.2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+    .panel-body { padding: 18px 20px; }
+
+    /* ── GIF panel ── */
+    #panel-gif { width: 240px; }
+    #panel-gif .panel-body { padding: 0; overflow: hidden; }
+    #panel-gif img {
+      width: 100%;
+      display: block;
+      filter: brightness(.9) saturate(1.1);
+      image-rendering: pixelated;
+    }
+
+    /* ── Bio panel ── */
+    #panel-bio { width: 400px; }
+    .name {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(1.2rem, 2.5vw, 1.9rem);
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: .05em;
+      line-height: 1.1;
+    }
+    .name span { color: var(--cyan); text-shadow: var(--glow-cyan); }
+    .tagline {
+      margin-top: 6px;
+      font-size: .85rem;
+      color: var(--text-dim);
+      letter-spacing: .06em;
+    }
+    .tagline em { color: var(--teal); font-style: normal; text-shadow: var(--glow-teal); }
+    .terminal-wrap { margin-top: 18px; }
+    .terminal-wrap::before {
+      content: '$ bio --stream';
+      display: block;
+      font-size: 10px;
+      color: var(--teal);
+      letter-spacing: .14em;
+      margin-bottom: 8px;
+      text-shadow: var(--glow-teal);
+    }
+    #terminal-canvas { display: block; width: 100%; }
+
+    /* ── Role panel ── */
+    #panel-role { width: 380px; }
+    .role-card p { font-size: .84rem; line-height: 1.8; color: var(--text); }
+    .role-card strong { color: #fff; font-weight: normal; }
+
+    /* ── Responsibilities panel ── */
+    #panel-resp { width: 460px; }
+    .pillars {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .pillar {
+      background: rgba(0,255,65,.022);
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .pillar:hover { border-color: var(--cyan); box-shadow: inset 0 0 16px rgba(0,229,255,.04); }
+    .pillar-icon { font-size: .9rem; margin-bottom: 6px; color: var(--cyan); text-shadow: var(--glow-cyan); }
+    .pillar-title {
+      font-family: 'Orbitron', monospace;
+      font-size: .6rem;
+      letter-spacing: .1em;
+      color: var(--teal);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+    .pillar p { font-size: .76rem; color: #7aba7a; line-height: 1.6; }
+
+    /* ── Tech stack panel ── */
+    #panel-tech { width: 370px; }
+    #tags-canvas { display: block; width: 100%; }
+
+    /* ── Stats panel ── */
+    #panel-stats { width: 350px; }
+    .stats-wrap { display: flex; align-items: center; justify-content: center; }
+    .stats-wrap img { max-width: 100%; filter: brightness(1.05) saturate(1.1); }
+
+    /* ── Fixed bottom label ── */
+    .bottom-label {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 500;
+      text-align: center;
+      padding: 10px;
+      font-size: .62rem;
+      letter-spacing: .2em;
+      color: rgba(0,229,255,.35);
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    /* ── Corner decorations ── */
+    .corner-deco { position: fixed; width: 48px; height: 48px; pointer-events: none; z-index: 9998; }
+    .corner-deco.tl { top: 10px; left: 10px; border-top: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+    .corner-deco.br { bottom: 10px; right: 10px; border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+  </style>
+</head>
+<body>
+
+  <img class="page-bg" src="./assets/2825704.gif" alt="" />
+  <canvas id="net-canvas"></canvas>
+  <div class="scanlines"></div>
+  <div class="corner-deco tl"></div>
+  <div class="corner-deco br"></div>
+
+  <div id="surface">
+
+    <div class="panel" id="panel-gif">
+      <div class="panel-bar">
+        <span class="panel-bar-title">// feed.01</span>
+        <span class="panel-bar-dot"></span>
+      </div>
+      <div class="panel-body">
+        <img src="./assets/POd5.gif" alt="operator at station" />
+      </div>
+    </div>
+
+    <div class="panel" id="panel-bio">
+      <div class="panel-bar">
+        <span class="panel-bar-title">// system.init</span>
+        <span class="panel-bar-dot"></span>
+      </div>
+      <div class="panel-body">
+        <div class="name">hunter<span>chris</span></div>
+        <div class="tagline">Lead Engineer (Cloud) &mdash; <em>Berlin</em></div>
+        <div class="terminal-wrap">
+          <canvas id="terminal-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-role">
+      <div class="panel-bar">
+        <span class="panel-bar-title">// current_role</span>
+        <span class="panel-bar-dot"></span>
+      </div>
+      <div class="panel-body">
+        <div class="role-card">
+          <p>
+            <strong>Lead Engineer (Cloud)</strong> &mdash; <strong>Platforms</strong> dept. &mdash;
+            <strong>Axel Springer National Media &amp; Tech</strong>, Berlin.
+          </p>
+          <p style="margin-top:10px;">
+            Supporting cloud infrastructure across NMT business units:
+            architecture design, deployment pipelines, cost governance,
+            observability, and platform reliability. Helping bridge
+            engineering strategy with day-to-day technical execution.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-resp">
+      <div class="panel-bar">
+        <span class="panel-bar-title">// responsibilities</span>
+        <span class="panel-bar-dot"></span>
+      </div>
+      <div class="panel-body">
+        <div class="pillars">
+          <div class="pillar">
+            <div class="pillar-icon">&gt;_</div>
+            <div class="pillar-title">Strategy &rarr; Code</div>
+            <p>Bridge between NMT strategy and technical implementation.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon">[+]</div>
+            <div class="pillar-title">Roadmaps</div>
+            <p>Supporting business units in drafting technical roadmaps.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon">~~</div>
+            <div class="pillar-title">Platform Changes</div>
+            <p>Driving platform-wide architectural changes for reliability.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon">01</div>
+            <div class="pillar-title">Enablement</div>
+            <p>Mentoring engineers and building tools for their day-to-day.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-tech">
+      <div class="panel-bar">
+        <span class="panel-bar-title">// tech_stack</span>
+        <span class="panel-bar-dot"></span>
+      </div>
+      <div class="panel-body">
+        <canvas id="tags-canvas"></canvas>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-stats">
+      <div class="panel-bar">
+        <span class="panel-bar-title">// boring_stats</span>
+        <span class="panel-bar-dot"></span>
+      </div>
+      <div class="panel-body">
+        <div class="stats-wrap">
+          <img
+            src="https://github-readme-stats-sigma-five.vercel.app/api/top-langs/?username=hunterchris&theme=merko"
+            alt="Top languages"
+          />
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="bottom-label">always learning &mdash; always curious &nbsp;&bull;&nbsp; hunterchris &nbsp;&bull;&nbsp; berlin</div>
+
+  <!-- KubeDoom modal -->
+  <div id="kubedoom-modal" style="
+    display:none; position:fixed; inset:0; z-index:9000;
+    background:rgba(0,0,0,.78); backdrop-filter:blur(5px);
+    align-items:center; justify-content:center;
+  ">
+    <div style="
+      background:#080c14; border:1px solid #00ff41; border-top:3px solid #00ff41;
+      max-width:560px; width:90%; box-shadow:0 0 50px #00ff4122;
+      font-family:'Share Tech Mono',monospace;
+    ">
+      <div style="padding:13px 18px; border-bottom:1px solid #0d2e12; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:'Orbitron',monospace; font-size:.6rem; letter-spacing:.22em; color:#00ff41; text-shadow:0 0 8px #00ff4188;">// kubedoom.exe</span>
+        <button id="kubedoom-close" style="background:none;border:none;color:#3a6b3a;cursor:pointer;font-size:1rem;line-height:1;">✕</button>
+      </div>
+      <div style="padding:18px 20px 6px; font-size:.76rem; color:#b8d4b8; line-height:1.7;">
+        <p style="margin-bottom:14px;">
+          Open the
+          <a href="https://killercoda.com/playgrounds/scenario/kubernetes" target="_blank" rel="noopener"
+            style="color:#00ff41; text-decoration:underline;">KillerCoda K8s playground ↗</a>
+          then paste these commands:
+        </p>
+        <div id="kubedoom-steps"></div>
+      </div>
+      <div style="padding:8px 20px 16px; font-size:.62rem; color:#3a6b3a; border-top:1px solid #0d2e12; margin-top:8px;">
+        VNC password: <span style="color:#00ff41;">idbehold</span>
+        &nbsp;·&nbsp; noclip: <span style="color:#00ff41;">idspispopd</span>
+        &nbsp;·&nbsp; weapons: <span style="color:#00ff41;">idkfa</span>
+        &nbsp;·&nbsp; session ~60 min
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { prepareWithSegments, layoutWithLines } from 'https://esm.sh/@chenglou/pretext@0.0.4'
+
+    const CYAN = '#00ff41'
+    const TEAL = '#00cc33'
+    const DIM  = '#3a6b3a'
+    const TEXT = '#b8d4b8'
+    const BDR  = '#0d2e12'
+    const DPR  = window.devicePixelRatio || 1
+
+    // ── Network canvas ─────────────────────────────────────────────────────────
+    const netEl  = document.getElementById('net-canvas')
+    const netCtx = netEl.getContext('2d')
+
+    function resizeNet() {
+      netEl.width  = Math.round(window.innerWidth  * DPR)
+      netEl.height = Math.round(window.innerHeight * DPR)
+      netEl.style.width  = window.innerWidth  + 'px'
+      netEl.style.height = window.innerHeight + 'px'
+    }
+    resizeNet()
+    window.addEventListener('resize', resizeNet)
+
+    // ── Physics nodes ──────────────────────────────────────────────────────────
+    const nodes = []
+    document.querySelectorAll('.panel').forEach(el => {
+      nodes.push({ el, x: 0, y: 0, vx: 0, vy: 0, w: 0, h: 0, pinned: false })
+    })
+
+    function readDims() {
+      nodes.forEach(n => { n.w = n.el.offsetWidth; n.h = n.el.offsetHeight })
+    }
+
+    // ── Initial layout ─────────────────────────────────────────────────────────
+    function placeInitial() {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+
+      // Page 1: gif, bio, role, resp, tech  — Page 2: stats (requires scroll)
+      const slots = [
+        { id: 'panel-gif',   x: vw * .04,  y: vh * .06  },
+        { id: 'panel-bio',   x: vw * .26,  y: vh * .06  },
+        { id: 'panel-role',  x: vw * .04,  y: vh * .50  },
+        { id: 'panel-resp',  x: vw * .50,  y: vh * .34  },
+        { id: 'panel-tech',  x: vw * .04,  y: vh * .78  },
+        { id: 'panel-stats', x: vw * .30,  y: vh * 1.22 },  // 2nd page
+      ]
+
+      slots.forEach(s => {
+        const node = nodes.find(n => n.el.id === s.id)
+        if (!node) return
+        node.x = Math.max(16, s.x)
+        node.y = Math.max(16, s.y)
+        node.el.style.left = node.x + 'px'
+        node.el.style.top  = node.y + 'px'
+      })
+    }
+
+    // ── Physics constants ──────────────────────────────────────────────────────
+    const GAP      = 20    // minimum gap between panels
+    const PUSH     = 0.5   // fraction of overlap turned into velocity each frame
+    const DAMPING  = 0.74  // velocity decay per frame
+    const MAX_V    = 16    // max speed in px/frame
+    const MARGIN   = 14    // viewport edge margin
+
+    let topZ = 10
+    let restartTerminal = null
+
+    // ── Physics step ──────────────────────────────────────────────────────────
+    function physicsStep() {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const surfaceH = vh * 2   // matches min-height: 200vh
+
+      // Pairwise AABB repulsion
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j]
+
+          const acx = a.x + a.w * .5,  acy = a.y + a.h * .5
+          const bcx = b.x + b.w * .5,  bcy = b.y + b.h * .5
+
+          const dx  = bcx - acx
+          const dy  = bcy - acy
+          const ovX = (a.w + b.w) * .5 + GAP - Math.abs(dx)
+          const ovY = (a.h + b.h) * .5 + GAP - Math.abs(dy)
+
+          if (ovX <= 0 || ovY <= 0) continue  // no overlap
+
+          // Separate along the axis of least penetration
+          let fx = 0, fy = 0
+          if (ovX < ovY) {
+            fx = Math.sign(dx || 1) * ovX * PUSH
+          } else {
+            fy = Math.sign(dy || 1) * ovY * PUSH
+          }
+
+          // Split displacement: pinned nodes absorb nothing
+          const wa = a.pinned ? 0 : 1
+          const wb = b.pinned ? 0 : 1
+          const wt = wa + wb
+          if (wt === 0) continue
+
+          if (!a.pinned) { a.vx -= fx * (wa / wt);  a.vy -= fy * (wa / wt) }
+          if (!b.pinned) { b.vx += fx * (wb / wt);  b.vy += fy * (wb / wt) }
+        }
+      }
+
+      // Integrate, damp, clamp, boundary
+      for (const n of nodes) {
+        if (n.pinned) {
+          n.el.style.left = n.x + 'px'
+          n.el.style.top  = n.y + 'px'
+          continue
+        }
+
+        // Speed cap
+        const spd = Math.hypot(n.vx, n.vy)
+        if (spd > MAX_V) { n.vx = n.vx / spd * MAX_V;  n.vy = n.vy / spd * MAX_V }
+
+        n.x += n.vx
+        n.y += n.vy
+        n.vx *= DAMPING
+        n.vy *= DAMPING
+
+        // Soft surface boundary bounce
+        if (n.x < MARGIN)                    { n.x = MARGIN;                    n.vx =  Math.abs(n.vx) * .35 }
+        if (n.y < MARGIN)                    { n.y = MARGIN;                    n.vy =  Math.abs(n.vy) * .35 }
+        if (n.x + n.w > vw - MARGIN)         { n.x = vw - MARGIN - n.w;        n.vx = -Math.abs(n.vx) * .35 }
+        if (n.y + n.h > surfaceH - MARGIN)   { n.y = surfaceH - MARGIN - n.h;  n.vy = -Math.abs(n.vy) * .35 }
+
+        n.el.style.left = n.x + 'px'
+        n.el.style.top  = n.y + 'px'
+      }
+    }
+
+    // ── Draw network connections ───────────────────────────────────────────────
+    const MAX_DIST  = 540   // max connection distance (center to center)
+    const LINE_FADE = 0.14  // max opacity of connections
+
+    function drawNet() {
+      const W = window.innerWidth
+      const H = window.innerHeight
+
+      netCtx.setTransform(DPR, 0, 0, DPR, 0, 0)
+      netCtx.clearRect(0, 0, W, H)
+
+      // Draw edges (node positions are document coords; subtract scrollY for fixed canvas)
+      const sy = window.scrollY
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j]
+
+          const ax = a.x + a.w * .5,  ay = a.y + a.h * .5 - sy
+          const bx = b.x + b.w * .5,  by = b.y + b.h * .5 - sy
+          const dist = Math.hypot(bx - ax, by - ay)
+
+          if (dist > MAX_DIST) continue
+
+          const alpha = (1 - dist / MAX_DIST) * LINE_FADE
+
+          netCtx.beginPath()
+          netCtx.moveTo(ax, ay)
+          netCtx.lineTo(bx, by)
+          netCtx.strokeStyle = `rgba(0,255,65,${alpha.toFixed(3)})`
+          netCtx.lineWidth   = .8
+          netCtx.shadowColor = '#00e5ff'
+          netCtx.shadowBlur  = 5
+          netCtx.stroke()
+        }
+      }
+
+      // Draw center dots
+      netCtx.shadowBlur = 8
+      for (const n of nodes) {
+        const cx = n.x + n.w * .5,  cy = n.y + n.h * .5 - sy
+        netCtx.beginPath()
+        netCtx.arc(cx, cy, 2.5, 0, Math.PI * 2)
+        netCtx.fillStyle = 'rgba(0,255,65,.22)'
+        netCtx.fill()
+      }
+
+      netCtx.shadowBlur = 0
+    }
+
+    // ── Main loop ──────────────────────────────────────────────────────────────
+    function loop() {
+      physicsStep()
+      drawNet()
+      requestAnimationFrame(loop)
+    }
+
+    // ── Drag ──────────────────────────────────────────────────────────────────
+    nodes.forEach(node => {
+      const bar = node.el.querySelector('.panel-bar')
+      let active = false
+      let ox = 0, oy = 0
+      let prevX = 0, prevY = 0
+
+      // Any click on the panel brings it to front
+      node.el.addEventListener('mousedown', () => {
+        node.el.style.zIndex = ++topZ
+      }, true)
+
+      function startDrag(clientX, clientY) {
+        active = true
+        node.pinned = true
+        node.vx = 0; node.vy = 0
+        const rect = node.el.getBoundingClientRect()
+        ox = clientX - rect.left
+        oy = clientY - rect.top
+        prevX = node.x; prevY = node.y
+        node.el.style.zIndex = ++topZ
+      }
+
+      function moveDrag(clientX, clientY) {
+        if (!active) return
+        const nx = clientX - ox
+        const ny = clientY + window.scrollY - oy   // document coords
+        node.vx = nx - node.x   // velocity = this frame's displacement
+        node.vy = ny - node.y
+        node.x  = nx
+        node.y  = ny
+      }
+
+      function endDrag() {
+        if (!active) return
+        active = false
+        node.pinned = false
+        // Clamp release velocity so it doesn't shoot off
+        const spd = Math.hypot(node.vx, node.vy)
+        if (spd > MAX_V) { node.vx = node.vx / spd * MAX_V; node.vy = node.vy / spd * MAX_V }
+        // Replay typewriter when bio panel is dropped
+        if (node.el.id === 'panel-bio' && restartTerminal) {
+          setTimeout(restartTerminal, 320)
+        }
+      }
+
+      bar.addEventListener('mousedown', e => {
+        if (e.button !== 0) return
+        startDrag(e.clientX, e.clientY)
+        bar.style.cursor = 'grabbing'
+        e.preventDefault()
+      })
+
+      bar.addEventListener('touchstart', e => {
+        startDrag(e.touches[0].clientX, e.touches[0].clientY)
+        e.preventDefault()
+      }, { passive: false })
+
+      document.addEventListener('mousemove', e => {
+        if (active) moveDrag(e.clientX, e.clientY)
+      })
+
+      document.addEventListener('touchmove', e => {
+        if (active) { moveDrag(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault() }
+      }, { passive: false })
+
+      document.addEventListener('mouseup', () => { endDrag(); bar.style.cursor = 'grab' })
+      document.addEventListener('touchend', endDrag)
+    })
+
+    // ── Canvas helper ─────────────────────────────────────────────────────────
+    function setupCanvas(canvas, w, h) {
+      canvas.width  = Math.round(w * DPR)
+      canvas.height = Math.round(h * DPR)
+      canvas.style.width  = w + 'px'
+      canvas.style.height = h + 'px'
+      const ctx = canvas.getContext('2d')
+      ctx.scale(DPR, DPR)
+      return ctx
+    }
+
+    // ── Terminal animation ─────────────────────────────────────────────────────
+    function initTerminal() {
+      const canvas = document.getElementById('terminal-canvas')
+      // getBoundingClientRect forces a reflow and gives the true CSS-rendered width
+      const W = Math.round(canvas.getBoundingClientRect().width) || canvas.parentElement.offsetWidth - 40 || 320
+
+      const FONT     = '13px "Share Tech Mono"'
+      const LINE_H   = 20
+      const GAP_H    = 10
+      const INDENT   = 18
+      const CHAR_MS  = 18
+      const PAUSE_MS = 480
+
+      const phrases = [
+        'I know many things... and nothing at all.',
+        'Lead Cloud Engineer specializing in scalable platform architecture, cloud infrastructure, and engineering enablement.',
+        'ITIL v4. Native Spanish speaker. English C1. German B2. Based in Berlin since a while.',
+      ]
+
+      const allLines = []
+      for (let p = 0; p < phrases.length; p++) {
+        const prep = prepareWithSegments(phrases[p], FONT)
+        const { lines } = layoutWithLines(prep, W - INDENT, LINE_H)
+        lines.forEach((l, idx) => allLines.push({ text: l.text, gap: false, first: idx === 0 }))
+        if (p < phrases.length - 1) allLines.push({ text: '', gap: true, first: false })
+      }
+
+      const totalH = allLines.reduce((h, l) => h + (l.gap ? GAP_H : LINE_H), 0) + 10
+      const ctx = setupCanvas(canvas, W, totalH)
+      ctx.font = FONT
+
+      const lineY = [];  let _y = 0
+      for (const l of allLines) { lineY.push(_y); _y += l.gap ? GAP_H : LINE_H }
+
+      let li = 0, ci = 0, cursorOn = true, done = false
+      setInterval(() => { cursorOn = !cursorOn; if (done) render() }, 530)
+
+      function render() {
+        ctx.clearRect(0, 0, W, totalH)
+        ctx.font = FONT
+        for (let i = 0; i < allLines.length; i++) {
+          const line = allLines[i]
+          if (line.gap) continue
+          const y = lineY[i] + LINE_H - 3
+          if (i < li) {
+            if (line.first) { ctx.shadowColor=CYAN; ctx.shadowBlur=3; ctx.fillStyle=CYAN; ctx.fillText('> ',0,y) }
+            ctx.shadowBlur=0; ctx.fillStyle=TEXT; ctx.fillText(line.text, INDENT, y)
+          } else if (i === li) {
+            const part = line.text.slice(0, ci)
+            if (line.first) { ctx.shadowColor=CYAN; ctx.shadowBlur=3; ctx.fillStyle=CYAN; ctx.fillText('> ',0,y) }
+            ctx.shadowBlur=0; ctx.fillStyle=TEXT; ctx.fillText(part, INDENT, y)
+            if (cursorOn) {
+              const mw = ctx.measureText(part).width
+              ctx.shadowColor=CYAN; ctx.shadowBlur=10; ctx.fillStyle=CYAN
+              ctx.fillRect(INDENT + mw + 1, lineY[i] + 4, 7, LINE_H - 4)
+            }
+          }
+        }
+      }
+
+      function advance() {
+        if (li >= allLines.length) { done = true; render(); return }
+        const line = allLines[li]
+        if (line.gap) { render(); li++; ci=0; setTimeout(()=>requestAnimationFrame(advance), PAUSE_MS); return }
+        ci++
+        if (ci > line.text.length) { li++; ci=0 }
+        render()
+        if (li < allLines.length) setTimeout(()=>requestAnimationFrame(advance), CHAR_MS)
+        else done = true
+      }
+
+      function start() {
+        li = 0; ci = 0; done = false
+        render()
+        setTimeout(() => requestAnimationFrame(advance), 500)
+      }
+
+      start()
+      return start
+    }
+
+    // ── Tags canvas ───────────────────────────────────────────────────────────
+    function initTags() {
+      const tags = [
+        'Cloud Architecture', 'Infrastructure as Code', 'Kubernetes',
+        'Terraform', 'Observability', 'CI / CD', 'Cost Optimization',
+        'Platform Engineering', 'Automation', 'Deployments',
+        'Technical Roadmaps', 'Mentoring', 'System Reliability',
+      ]
+
+      const canvas = document.getElementById('tags-canvas')
+      const W      = Math.round(canvas.getBoundingClientRect().width) || canvas.parentElement.offsetWidth - 40 || 310
+      const FONT   = '12px "Share Tech Mono"'
+      const TAG_H  = 26, PAD_X = 14, GAP_X = 7, GAP_Y = 7
+
+      const tmp = document.createElement('canvas').getContext('2d')
+      tmp.font  = FONT
+
+      const measured = tags.map(t => {
+        const { lines } = layoutWithLines(prepareWithSegments(t, FONT), 9999, TAG_H)
+        const label = lines[0]?.text ?? t
+        return { text: label, tagW: tmp.measureText(label).width + PAD_X * 2 }
+      })
+
+      const rows = []; let row = [], rowW = 0
+      for (const tag of measured) {
+        const needed = row.length ? rowW + GAP_X + tag.tagW : tag.tagW
+        if (needed > W && row.length) { rows.push(row); row=[tag]; rowW=tag.tagW }
+        else { if (row.length) rowW += GAP_X; rowW += tag.tagW; row.push(tag) }
+      }
+      if (row.length) rows.push(row)
+
+      const totalH = rows.length * (TAG_H + GAP_Y) - GAP_Y
+      const ctx = setupCanvas(canvas, W, totalH)
+
+      function draw(hot) {
+        ctx.clearRect(0, 0, W, totalH)
+        ctx.font = FONT
+        ctx.textBaseline = 'middle'
+        let y = 0
+        for (const r of rows) {
+          let x = 0
+          for (const tag of r) {
+            const h = tag === hot
+            const ix = Math.round(x), iy = Math.round(y)
+
+            // Border — glow only on hover, sharp at rest
+            ctx.shadowColor = CYAN
+            ctx.shadowBlur  = h ? 8 : 0
+            ctx.strokeStyle = h ? CYAN : BDR
+            ctx.lineWidth   = 1
+            ctx.strokeRect(ix + .5, iy + .5, tag.tagW - 1, TAG_H - 1)
+
+            // Background tint
+            ctx.shadowBlur = 0
+            ctx.fillStyle  = h ? 'rgba(0,255,65,.08)' : 'rgba(0,255,65,.025)'
+            ctx.fillRect(ix + 1, iy + 1, tag.tagW - 2, TAG_H - 2)
+
+            // Text — no shadow at rest so it stays crisp; subtle glow on hover
+            const isLink = tag.text === 'Kubernetes'
+            ctx.shadowBlur  = h ? 8 : 0
+            ctx.shadowColor = CYAN
+            ctx.fillStyle   = h ? CYAN : '#6abf6a'
+            // Integer Y for pixel-perfect text baseline
+            ctx.fillText(tag.text, ix + PAD_X, Math.round(iy + TAG_H / 2))
+            // Link indicator: small ↗ in the top-right corner when hovered
+            if (h && isLink) {
+              ctx.font = '9px "Share Tech Mono"'
+              ctx.shadowBlur = 6
+              ctx.fillStyle  = CYAN
+              ctx.fillText('↗', ix + tag.tagW - 13, iy + 10)
+              ctx.font = FONT
+            }
+
+            x += tag.tagW + GAP_X
+          }
+          y += TAG_H + GAP_Y
+        }
+        ctx.shadowBlur = 0
+      }
+
+      draw(null)
+
+      function hitTest(e) {
+        const r = canvas.getBoundingClientRect()
+        const mx = e.clientX - r.left, my = e.clientY - r.top
+        let hit = null, ry = 0
+        outer: for (const row of rows) {
+          let rx = 0
+          for (const tag of row) {
+            if (mx >= rx && mx <= rx + tag.tagW && my >= ry && my <= ry + TAG_H) { hit = tag; break outer }
+            rx += tag.tagW + GAP_X
+          }
+          ry += TAG_H + GAP_Y
+        }
+        return hit
+      }
+
+      canvas.addEventListener('mousemove', e => {
+        const hit = hitTest(e)
+        canvas.style.cursor = (hit?.text === 'Kubernetes') ? 'pointer' : 'default'
+        draw(hit)
+      })
+      canvas.addEventListener('mouseleave', () => { canvas.style.cursor = 'default'; draw(null) })
+      canvas.addEventListener('click', e => {
+        if (hitTest(e)?.text === 'Kubernetes') openKubedoom()
+      })
+    }
+
+    // ── KubeDoom modal ────────────────────────────────────────────────────────
+    const KUBEDOOM_STEPS = [
+      { label: '1 · verify cluster', cmd: 'kubectl get nodes' },
+      { label: '2 · deploy (namespace + rbac + deployment)', cmd: 'kubectl apply -k https://github.com/storax/kubedoom/manifest/' },
+      { label: '3 · wait for pod', cmd: 'kubectl wait --for=condition=Ready pod -l app=kubedoom -n kubedoom --timeout=90s' },
+      { label: '4 · forward vnc port  (keep this terminal open)', cmd: 'kubectl port-forward -n kubedoom deployment/kubedoom 5900:5900' },
+      { label: '5 · new terminal — install novnc and bridge vnc → browser on 0.0.0.0:6080', cmd: 'apt-get install -y novnc websockify -qq && websockify --web=/usr/share/novnc/ 0.0.0.0:6080 localhost:5900' },
+      { label: '6 · new terminal — get your full browser url (copy and open it)', cmd: "echo \"$(sed 's/PORT/6080/g' /etc/killercoda/host)/vnc_lite.html\"" },
+    ]
+
+    ;(function buildModal() {
+      const container = document.getElementById('kubedoom-steps')
+      KUBEDOOM_STEPS.forEach(({ label, cmd }) => {
+        const wrap = document.createElement('div')
+        wrap.style.cssText = 'margin-bottom:9px;'
+
+        const lbl = document.createElement('div')
+        lbl.style.cssText = 'font-size:.58rem; color:#3a6b3a; margin-bottom:3px; letter-spacing:.1em;'
+        lbl.textContent = label
+
+        const row = document.createElement('div')
+        row.style.cssText = 'display:flex; align-items:stretch; border:1px solid #0d2e12; cursor:pointer;'
+        row.title = 'click to copy'
+
+        const code = document.createElement('div')
+        code.style.cssText = 'flex:1; padding:7px 12px; color:#00ff41; font-size:.7rem; word-break:break-all; line-height:1.5;'
+        code.textContent = cmd
+
+        const btn = document.createElement('div')
+        btn.style.cssText = 'padding:7px 12px; color:#3a6b3a; font-size:.62rem; display:flex; align-items:center; border-left:1px solid #0d2e12; white-space:nowrap;'
+        btn.textContent = 'copy'
+
+        row.addEventListener('click', () => {
+          navigator.clipboard.writeText(cmd).then(() => {
+            btn.textContent = 'copied ✓'; btn.style.color = '#00ff41'
+            setTimeout(() => { btn.textContent = 'copy'; btn.style.color = '#3a6b3a' }, 1800)
+          })
+        })
+        row.addEventListener('mouseenter', () => { row.style.background = 'rgba(0,255,65,.04)'; btn.style.color = '#00cc33' })
+        row.addEventListener('mouseleave', () => { row.style.background = ''; btn.style.color = '#3a6b3a' })
+
+        row.append(code, btn)
+        wrap.append(lbl, row)
+        container.appendChild(wrap)
+      })
+    })()
+
+    function openKubedoom() {
+      window.open('https://killercoda.com/playgrounds/scenario/kubernetes', '_blank', 'noopener')
+      document.getElementById('kubedoom-modal').style.display = 'flex'
+    }
+
+    document.getElementById('kubedoom-close').addEventListener('click', () => {
+      document.getElementById('kubedoom-modal').style.display = 'none'
+    })
+    document.getElementById('kubedoom-modal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = 'none'
+    })
+
+    // ── Boot ──────────────────────────────────────────────────────────────────
+    document.fonts.ready.then(() => {
+      readDims()
+      placeInitial()
+      requestAnimationFrame(loop)
+      // Defer canvas inits by one frame so the browser has settled
+      // the absolute-panel layout before we read rendered dimensions
+      requestAnimationFrame(() => {
+        restartTerminal = initTerminal()
+        initTags()
+      })
+    })
+  </script>
+</body>
+</html>
