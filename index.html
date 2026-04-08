@@ -331,6 +331,39 @@
 
   <div class="bottom-label">always learning &mdash; always curious &nbsp;&bull;&nbsp; hunterchris &nbsp;&bull;&nbsp; berlin</div>
 
+  <!-- KubeDoom modal -->
+  <div id="kubedoom-modal" style="
+    display:none; position:fixed; inset:0; z-index:9000;
+    background:rgba(0,0,0,.78); backdrop-filter:blur(5px);
+    align-items:center; justify-content:center;
+  ">
+    <div style="
+      background:#080c14; border:1px solid #00ff41; border-top:3px solid #00ff41;
+      max-width:560px; width:90%; box-shadow:0 0 50px #00ff4122;
+      font-family:'Share Tech Mono',monospace;
+    ">
+      <div style="padding:13px 18px; border-bottom:1px solid #0d2e12; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:'Orbitron',monospace; font-size:.6rem; letter-spacing:.22em; color:#00ff41; text-shadow:0 0 8px #00ff4188;">// kubedoom.exe</span>
+        <button id="kubedoom-close" style="background:none;border:none;color:#3a6b3a;cursor:pointer;font-size:1rem;line-height:1;">✕</button>
+      </div>
+      <div style="padding:18px 20px 6px; font-size:.76rem; color:#b8d4b8; line-height:1.7;">
+        <p style="margin-bottom:14px;">
+          Open the
+          <a href="https://killercoda.com/playgrounds/scenario/kubernetes" target="_blank" rel="noopener"
+            style="color:#00ff41; text-decoration:underline;">KillerCoda K8s playground ↗</a>
+          then paste these commands:
+        </p>
+        <div id="kubedoom-steps"></div>
+      </div>
+      <div style="padding:8px 20px 16px; font-size:.62rem; color:#3a6b3a; border-top:1px solid #0d2e12; margin-top:8px;">
+        VNC password: <span style="color:#00ff41;">idbehold</span>
+        &nbsp;·&nbsp; noclip: <span style="color:#00ff41;">idspispopd</span>
+        &nbsp;·&nbsp; weapons: <span style="color:#00ff41;">idkfa</span>
+        &nbsp;·&nbsp; session ~60 min
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { prepareWithSegments, layoutWithLines } from 'https://esm.sh/@chenglou/pretext@0.0.4'
 
@@ -743,11 +776,20 @@
             ctx.fillRect(ix + 1, iy + 1, tag.tagW - 2, TAG_H - 2)
 
             // Text — no shadow at rest so it stays crisp; subtle glow on hover
+            const isLink = tag.text === 'Kubernetes'
             ctx.shadowBlur  = h ? 8 : 0
             ctx.shadowColor = CYAN
             ctx.fillStyle   = h ? CYAN : '#6abf6a'
             // Integer Y for pixel-perfect text baseline
             ctx.fillText(tag.text, ix + PAD_X, Math.round(iy + TAG_H / 2))
+            // Link indicator: small ↗ in the top-right corner when hovered
+            if (h && isLink) {
+              ctx.font = '9px "Share Tech Mono"'
+              ctx.shadowBlur = 6
+              ctx.fillStyle  = CYAN
+              ctx.fillText('↗', ix + tag.tagW - 13, iy + 10)
+              ctx.font = FONT
+            }
 
             x += tag.tagW + GAP_X
           }
@@ -758,21 +800,90 @@
 
       draw(null)
 
-      canvas.addEventListener('mousemove', e => {
-        const r = canvas.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top
-        let hit=null, ry=0
+      function hitTest(e) {
+        const r = canvas.getBoundingClientRect()
+        const mx = e.clientX - r.left, my = e.clientY - r.top
+        let hit = null, ry = 0
         outer: for (const row of rows) {
-          let rx=0
+          let rx = 0
           for (const tag of row) {
-            if (mx>=rx && mx<=rx+tag.tagW && my>=ry && my<=ry+TAG_H) { hit=tag; break outer }
-            rx += tag.tagW+GAP_X
+            if (mx >= rx && mx <= rx + tag.tagW && my >= ry && my <= ry + TAG_H) { hit = tag; break outer }
+            rx += tag.tagW + GAP_X
           }
-          ry += TAG_H+GAP_Y
+          ry += TAG_H + GAP_Y
         }
+        return hit
+      }
+
+      canvas.addEventListener('mousemove', e => {
+        const hit = hitTest(e)
+        canvas.style.cursor = (hit?.text === 'Kubernetes') ? 'pointer' : 'default'
         draw(hit)
       })
-      canvas.addEventListener('mouseleave', () => draw(null))
+      canvas.addEventListener('mouseleave', () => { canvas.style.cursor = 'default'; draw(null) })
+      canvas.addEventListener('click', e => {
+        if (hitTest(e)?.text === 'Kubernetes') openKubedoom()
+      })
     }
+
+    // ── KubeDoom modal ────────────────────────────────────────────────────────
+    const KUBEDOOM_STEPS = [
+      { label: '1 · verify cluster', cmd: 'kubectl get nodes' },
+      { label: '2 · deploy (namespace + rbac + deployment)', cmd: 'kubectl apply -k https://github.com/storax/kubedoom/manifest/' },
+      { label: '3 · wait for pod', cmd: 'kubectl wait --for=condition=Ready pod -l app=kubedoom -n kubedoom --timeout=90s' },
+      { label: '4 · forward vnc port  (keep this terminal open)', cmd: 'kubectl port-forward -n kubedoom deployment/kubedoom 5900:5900' },
+      { label: '5 · new terminal — install novnc and bridge vnc → browser on 0.0.0.0:6080', cmd: 'apt-get install -y novnc websockify -qq && websockify --web=/usr/share/novnc/ 0.0.0.0:6080 localhost:5900' },
+      { label: '6 · new terminal — get your full browser url (copy and open it)', cmd: "echo \"$(sed 's/PORT/6080/g' /etc/killercoda/host)/vnc_lite.html\"" },
+    ]
+
+    ;(function buildModal() {
+      const container = document.getElementById('kubedoom-steps')
+      KUBEDOOM_STEPS.forEach(({ label, cmd }) => {
+        const wrap = document.createElement('div')
+        wrap.style.cssText = 'margin-bottom:9px;'
+
+        const lbl = document.createElement('div')
+        lbl.style.cssText = 'font-size:.58rem; color:#3a6b3a; margin-bottom:3px; letter-spacing:.1em;'
+        lbl.textContent = label
+
+        const row = document.createElement('div')
+        row.style.cssText = 'display:flex; align-items:stretch; border:1px solid #0d2e12; cursor:pointer;'
+        row.title = 'click to copy'
+
+        const code = document.createElement('div')
+        code.style.cssText = 'flex:1; padding:7px 12px; color:#00ff41; font-size:.7rem; word-break:break-all; line-height:1.5;'
+        code.textContent = cmd
+
+        const btn = document.createElement('div')
+        btn.style.cssText = 'padding:7px 12px; color:#3a6b3a; font-size:.62rem; display:flex; align-items:center; border-left:1px solid #0d2e12; white-space:nowrap;'
+        btn.textContent = 'copy'
+
+        row.addEventListener('click', () => {
+          navigator.clipboard.writeText(cmd).then(() => {
+            btn.textContent = 'copied ✓'; btn.style.color = '#00ff41'
+            setTimeout(() => { btn.textContent = 'copy'; btn.style.color = '#3a6b3a' }, 1800)
+          })
+        })
+        row.addEventListener('mouseenter', () => { row.style.background = 'rgba(0,255,65,.04)'; btn.style.color = '#00cc33' })
+        row.addEventListener('mouseleave', () => { row.style.background = ''; btn.style.color = '#3a6b3a' })
+
+        row.append(code, btn)
+        wrap.append(lbl, row)
+        container.appendChild(wrap)
+      })
+    })()
+
+    function openKubedoom() {
+      window.open('https://killercoda.com/playgrounds/scenario/kubernetes', '_blank', 'noopener')
+      document.getElementById('kubedoom-modal').style.display = 'flex'
+    }
+
+    document.getElementById('kubedoom-close').addEventListener('click', () => {
+      document.getElementById('kubedoom-modal').style.display = 'none'
+    })
+    document.getElementById('kubedoom-modal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) e.currentTarget.style.display = 'none'
+    })
 
     // ── Boot ──────────────────────────────────────────────────────────────────
     document.fonts.ready.then(() => {
